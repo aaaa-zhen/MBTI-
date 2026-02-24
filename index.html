@@ -624,31 +624,20 @@ function fetchQuestion(qIndex) {
 
   const dimFullName = {EI:'外向(E)/内向(I)',SN:'感觉(S)/直觉(N)',TF:'思维(T)/情感(F)',JP:'判断(J)/知觉(P)'}[dim];
 
-  // 计算当前维度倾向
-  let tilt = '';
-  if (qIndex > 0) {
-    const d0 = dim[0], d1 = dim[1];
-    const diff = scores[d0] - scores[d1];
-    if (diff > 1) tilt = `\n用户目前明显偏${d0}，请出更细腻的边界题来精确探测。`;
-    else if (diff < -1) tilt = `\n用户目前明显偏${d1}，请出更细腻的边界题来精确探测。`;
-  }
-
-  const prompt = `你是资深 MBTI 心理测评师，精通荣格人格类型理论。为以下用户出 1 道测试题。
+  const prompt = `你是 MBTI 测试出题专家。为以下用户生成 1 道 MBTI 测试题。
 
 用户: ${user.gender}，${user.age}岁，${user.city}
-第 ${qIndex+1}/${TOTAL_Q} 题，测试维度: ${dimFullName}${tilt}
+第 ${qIndex+1}/${TOTAL_Q} 题，维度: ${dimFullName}
 ${history}
 
-出题原则:
-1. 用真实生活场景出题（工作、社交、休闲、决策等），不要抽象描述
-2. 两个选项必须同样有吸引力，不能有明显"更好"的答案
-3. 用口语化表达，像朋友在聊天，不要心理学术语
-4. 题目要有具体细节（如"周末下午""同事约你""刚到一个新城市"），不要泛泛而谈
-5. 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
-6. 与之前的题目场景不同，覆盖不同生活面
-7. 题目不超过40字，每个选项不超过30字，务必精简
+要求:
+- 用贴近用户生活的真实情境出题，有具体细节
+- 两个选项必须分别明确指向${dim[0]}和${dim[1]}倾向，区分度要高
+- 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
+- 与之前的题目场景不同
+- 题目简短自然，像朋友间对话
 
-严格按此 JSON 输出，不要任何其他内容:
+严格按此 JSON 格式输出，不要输出任何其他内容:
 {"q":"题目","a":"选项A","b":"选项B"}`;
 
   return fetch(API_BASE + '/v1/messages', {
@@ -774,7 +763,6 @@ function pickAns(c) {
   const q = qList[cur];
   if (c === 'a') scores[q.d[0]]++;
   else if (c === 'b') scores[q.d[1]]++;
-  else { scores[q.d[0]] += 0.5; scores[q.d[1]] += 0.5; }
   cur++;
   if (cur >= TOTAL_Q) { prefetchedQ=null; prefetchPromise=null; goResult(); } else { genQuestion(); }
 }
@@ -789,7 +777,6 @@ function prevQ() {
     const lastAns = ansList[cur-1];
     if (lastAns === 'a') scores[lastQ.d[0]]--;
     else if (lastAns === 'b') scores[lastQ.d[1]]--;
-    else { scores[lastQ.d[0]] -= 0.5; scores[lastQ.d[1]] -= 0.5; }
     cur--;
 
     const pct = Math.round(cur/TOTAL_Q*100);
