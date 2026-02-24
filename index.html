@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>MBTI 职业性格测试</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.2/echarts.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0e0e11;
+  --card: rgba(255,255,255,0.04);
+  --card-border: rgba(255,255,255,0.07);
+  --text: #f0f0f0;
+  --text-2: rgba(255,255,255,0.55);
+  --text-3: rgba(255,255,255,0.28);
+  --glow1: rgba(120, 80, 220, 0.18);
+  --glow2: rgba(60, 100, 240, 0.14);
+  --glow3: rgba(200, 80, 160, 0.12);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 10%, var(--glow1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 85% 20%, var(--glow2) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 55% at 50% 90%, var(--glow3) 0%, transparent 55%);
+  pointer-events: none; z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed; top: -20%; left: -20%; width: 140%; height: 140%;
+  background:
+    radial-gradient(circle 400px at 20% 30%, rgba(140,80,255,0.06) 0%, transparent 100%),
+    radial-gradient(circle 350px at 80% 70%, rgba(80,120,255,0.05) 0%, transparent 100%);
+  animation: drift 20s ease-in-out infinite alternate;
+  pointer-events: none; z-index: 0;
+}
+
+@keyframes drift {
+  0% { transform: translate(0,0); }
+  100% { transform: translate(-20px,15px); }
+}
+
+.wrap {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 0 20px;
+  position: relative;
+  z-index: 1;
+}
+
+.page { display: none; }
+.page.active { display: flex; flex-direction: column; }
+
+/* ===== Buttons ===== */
+.btn {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  padding: 15px 0;
+  border: none;
+  border-radius: 50px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.btn-glow {
+  background: linear-gradient(135deg, rgba(120,80,220,0.65), rgba(80,100,240,0.55));
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(100,80,220,0.3);
+}
+
+.btn-glow:active { transform: scale(0.97); }
+
+.btn-dim {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-2);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.btn-dim:active { background: rgba(255,255,255,0.1); }
+
+/* ===== 首页 ===== */
+.home {
+  min-height: 100dvh;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 40px 0;
+}
+
+.home-icon {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(120,80,220,0.35), rgba(80,100,240,0.25));
+  border: 1px solid rgba(120,80,220,0.15);
+  display: grid; place-items: center;
+  margin: 0 auto 28px;
+  font-size: 24px;
+}
+
+.home h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+}
+
+.home .sub {
+  font-size: 14px;
+  color: var(--text-3);
+  line-height: 1.7;
+  margin-bottom: 40px;
+}
+
+.home-features {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-bottom: 40px;
+}
+
+.home-feat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-feat-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  display: grid; place-items: center;
+  font-size: 18px;
+}
+
+.home-feat-text {
+  font-size: 11px;
+  color: var(--text-3);
+  letter-spacing: 0.5px;
+}
+
+/* ===== 信息页 ===== */
+.info-pg { padding: 56px 0 40px; }
+
+.info-pg .hdr { margin-bottom: 32px; }
+.info-pg .hdr h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.info-pg .hdr p { font-size: 13px; color: var(--text-3); }
+
+.fg { margin-bottom: 24px; }
+.fg-label { font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 8px; letter-spacing: 0.3px; }
+
+.g-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.g-opt {
+  padding: 13px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.g-opt.on { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.07); color: var(--text); }
+
+.inp {
+  width: 100%; padding: 13px 16px;
+  border: 1px solid var(--card-border); border-radius: 12px;
+  background: var(--card); color: var(--text); font-size: 15px;
+  outline: none; -webkit-appearance: none;
+}
+
+.inp::placeholder { color: var(--text-3); }
+.inp:focus { border-color: rgba(255,255,255,0.18); }
+
+.sel-w { position: relative; }
+.sel-w::after {
+  content: ''; position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  border: 4px solid transparent; border-top: 5px solid var(--text-3); pointer-events: none;
+}
+
+.sel {
+  width: 100%; padding: 13px 36px 13px 16px;
+  border: 1px solid var(--card-border); border-radius: 12px;
+  background: var(--card); color: var(--text); font-size: 15px;
+  outline: none; -webkit-appearance: none; appearance: none;
+}
+
+.sel option { background: #1a1a1f; color: #eee; }
+.sel:disabled { opacity: 0.3; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+
+.chip {
+  padding: 7px 14px; border: 1px solid var(--card-border); border-radius: 20px;
+  background: transparent; color: var(--text-3); font-size: 13px; cursor: pointer; transition: all 0.2s;
+}
+
+.chip.on { border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.07); color: var(--text-2); }
+
+.sep {
+  display: flex; align-items: center; gap: 10px; margin: 12px 0;
+  font-size: 11px; color: var(--text-3); letter-spacing: 0.5px;
+}
+
+.sep::before, .sep::after { content: ''; flex: 1; height: 1px; background: var(--card-border); }
+
+.f-err { font-size: 13px; color: #ff6b6b; margin-bottom: 10px; display: none; }
+
+/* ===== 答题页 ===== */
+.quiz-pg {
+  min-height: 100dvh;
+  padding: 24px 0 32px;
+  justify-content: space-between;
+}
+
+.prog-bar { margin-bottom: 4px; }
+
+.prog-top {
+  display: flex; justify-content: space-between; margin-bottom: 8px;
+  font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+
+.prog-track { height: 2px; background: rgba(255,255,255,0.06); border-radius: 1px; overflow: hidden; }
+.prog-fill { height: 100%; background: #fff; border-radius: 1px; transition: width 0.4s ease; }
+
+.q-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 20px 0; }
+
+.q-card { animation: up 0.3s ease; }
+@keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+.q-tag {
+  display: inline-block; padding: 3px 8px; border-radius: 5px;
+  background: rgba(255,255,255,0.06); font-size: 11px; color: var(--text-3);
+  letter-spacing: 0.5px; margin-bottom: 14px;
+}
+
+.q-text {
+  font-size: 19px; font-weight: 600; line-height: 1.6; margin-bottom: 28px;
+}
+
+.q-opt {
+  display: block; width: 100%; padding: 16px 18px; margin-bottom: 10px;
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 14px;
+  font-size: 15px; line-height: 1.5; color: var(--text-2); cursor: pointer;
+  transition: all 0.15s; text-align: left;
+}
+
+.q-opt:active { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); color: var(--text); }
+
+.q-back {
+  display: inline-block; margin-top: 16px; padding: 6px 0;
+  font-size: 13px; color: var(--text-3); background: none; border: none; cursor: pointer;
+}
+
+/* AI 出题 loading */
+.q-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 0; gap: 16px;
+}
+
+.q-loading-dots { display: flex; gap: 6px; }
+
+.q-loading-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-3);
+  animation: dotP 1.2s ease-in-out infinite;
+}
+
+.q-loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+.q-loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes dotP { 0%,80%,100% { opacity:0.2; } 40% { opacity:0.8; } }
+
+.q-loading-text { font-size: 13px; color: var(--text-3); }
+
+/* ===== Loading 页 ===== */
+.load-pg {
+  min-height: 100dvh; justify-content: center; align-items: center; text-align: center;
+}
+
+.wave { display: flex; gap: 5px; margin-bottom: 20px; justify-content: center; }
+
+.wave i {
+  width: 3px; height: 22px; background: #fff; border-radius: 2px;
+  animation: w 1.2s ease-in-out infinite; font-style: normal;
+}
+
+.wave i:nth-child(2){animation-delay:.1s} .wave i:nth-child(3){animation-delay:.2s}
+.wave i:nth-child(4){animation-delay:.3s} .wave i:nth-child(5){animation-delay:.4s}
+
+@keyframes w { 0%,100%{transform:scaleY(.4);opacity:.2} 50%{transform:scaleY(1);opacity:.7} }
+
+.load-text { font-size: 14px; color: var(--text-3); }
+
+/* ===== 结果页 ===== */
+.res-pg { padding: 28px 0 48px; }
+
+.res-hero { text-align: center; margin-bottom: 36px; animation: fu .6s ease; }
+
+@keyframes fu { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+.res-tags { display: inline-flex; gap: 8px; margin-bottom: 18px; }
+.res-tags span {
+  padding: 4px 10px; border-radius: 6px; background: rgba(255,255,255,0.05);
+  font-size: 11px; color: var(--text-3);
+}
+
+.res-type {
+  font-size: 52px; font-weight: 800; letter-spacing: 6px; margin-bottom: 6px;
+  background: linear-gradient(180deg, #fff 20%, rgba(255,255,255,0.25));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.res-name { font-size: 17px; color: var(--text-2); margin-bottom: 14px; }
+.res-desc { font-size: 13px; color: var(--text-3); line-height: 1.8; max-width: 340px; margin: 0 auto; }
+
+.radar-w { margin-bottom: 28px; animation: fu .6s ease .1s both; }
+#radar { width: 100%; height: 260px; }
+
+.sec { margin-bottom: 20px; animation: fu .5s ease both; }
+.sec:nth-child(4){animation-delay:.12s} .sec:nth-child(5){animation-delay:.18s} .sec:nth-child(6){animation-delay:.24s}
+
+.sec-card {
+  background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 14px; padding: 20px;
+}
+
+.sec-label { font-size: 11px; color: var(--text-3); letter-spacing: 1.2px; margin-bottom: 14px; text-transform: uppercase; }
+
+.dim-r { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.dim-r:last-child { margin-bottom: 0; }
+.dim-n { font-size: 12px; color: var(--text-2); width: 44px; text-align: right; flex-shrink: 0; }
+.dim-t { flex: 1; height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+.dim-f { height: 100%; background: #fff; border-radius: 2px; transition: width 1s ease; }
+.dim-p { font-size: 12px; color: var(--text-3); width: 32px; font-variant-numeric: tabular-nums; }
+
+.ai-s { font-size: 14px; color: var(--text-2); line-height: 1.9; white-space: pre-wrap; word-wrap: break-word; }
+.ai-s strong { color: var(--text); }
+
+.blink::after { content:'|'; animation: bl 1s step-end infinite; color: var(--text-3); }
+@keyframes bl { 50%{opacity:0} }
+
+.ai-ld { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.ai-dot { width:5px;height:5px;border-radius:50%;background:var(--text-3);animation:dotP 1.4s ease-in-out infinite; }
+.ai-dot:nth-child(2){animation-delay:.15s} .ai-dot:nth-child(3){animation-delay:.3s}
+.ai-ld-t { font-size: 12px; color: var(--text-3); }
+
+.ai-err { font-size: 13px; color: #ff6b6b; line-height: 1.6; }
+.ai-err button { margin-top: 10px; padding: 7px 18px; border: 1px solid rgba(255,107,107,0.3); border-radius: 8px; background: none; color: #ff6b6b; font-size: 12px; cursor: pointer; }
+
+.res-ft { margin-top: 12px; text-align: center; animation: fu .5s ease .4s both; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- 首页 -->
+  <div id="home" class="page home active">
+    <div class="home-icon">M</div>
+    <h1>MBTI 职业性格测试</h1>
+    <p class="sub">AI 实时出题 · 深度性格分析<br>精准匹配你所在城市的职业方向</p>
+    <div class="home-features">
+      <div class="home-feat">
+        <div class="home-feat-icon">🧠</div>
+        <div class="home-feat-text">AI 出题</div>
+      </div>
+      <div class="home-feat">
+        <div class="home-feat-icon">📊</div>
+        <div class="home-feat-text">16 型人格</div>
+      </div>
+      <div class="home-feat">
+        <div class="home-feat-icon">🏙</div>
+        <div class="home-feat-text">城市就业</div>
+      </div>
+      <div class="home-feat">
+        <div class="home-feat-icon">🏢</div>
+        <div class="home-feat-text">企业推荐</div>
+      </div>
+    </div>
+    <button class="btn btn-glow" onclick="showPage('info')">开始测试</button>
+  </div>
+
+  <!-- 信息页 -->
+  <div id="info" class="page info-pg">
+    <div class="hdr">
+      <h2>基本信息</h2>
+      <p>帮助 AI 生成个性化的测试题目</p>
+    </div>
+
+    <div class="fg">
+      <div class="fg-label">性别</div>
+      <div class="g-row">
+        <div class="g-opt" onclick="pickG(this,'男')">男</div>
+        <div class="g-opt" onclick="pickG(this,'女')">女</div>
+      </div>
+    </div>
+
+    <div class="fg">
+      <div class="fg-label">年龄</div>
+      <input class="inp" id="ageInp" type="number" placeholder="输入你的年龄" min="10" max="100" inputmode="numeric">
+    </div>
+
+    <div class="fg">
+      <div class="fg-label">所在城市</div>
+      <div class="chips" id="hotGrid"></div>
+      <div class="sep"><span>或选择省份</span></div>
+      <div class="g-row">
+        <div class="sel-w"><select class="sel" id="provS" onchange="onProv()"><option value="">省份</option></select></div>
+        <div class="sel-w"><select class="sel" id="cityS" disabled><option value="">城市</option></select></div>
+      </div>
+    </div>
+
+    <div id="fErr" class="f-err"></div>
+    <button class="btn btn-glow" onclick="goQuiz()">开始答题</button>
+  </div>
+
+  <!-- 答题页 -->
+  <div id="quiz" class="page quiz-pg">
+    <div class="prog-bar">
+      <div class="prog-top"><span id="pN">1 / 20</span><span id="pP">0%</span></div>
+      <div class="prog-track"><div class="prog-fill" id="pF"></div></div>
+    </div>
+    <div class="q-body" id="qBody"></div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="page load-pg">
+    <div>
+      <div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="load-text">正在分析你的人格特质...</div>
+    </div>
+  </div>
+
+  <!-- 结果页 -->
+  <div id="result" class="page res-pg"></div>
+</div>
+
+<script>
+const API_KEY = 'sk-Onn9SamRwvkNDIeJvmAgQLH1xxwnphibz9F520aEfY5VrC0o';
+const API_BASE = 'https://www.packyapi.com';
+const TOTAL_Q = 20;
+
+const provData = {
+  "北京市":["北京"],"上海市":["上海"],"天津市":["天津"],"重庆市":["重庆"],
+  "广东省":["广州","深圳","东莞","佛山","珠海","惠州","中山","汕头"],
+  "江苏省":["南京","苏州","无锡","常州","南通","徐州","扬州"],
+  "浙江省":["杭州","宁波","温州","绍兴","嘉兴","金华","台州"],
+  "山东省":["济南","青岛","烟台","潍坊","临沂","威海"],
+  "河南省":["郑州","洛阳","南阳","许昌","新乡","开封"],
+  "四川省":["成都","绵阳","德阳","宜宾","南充","泸州"],
+  "湖北省":["武汉","宜昌","襄阳","荆州","十堰"],
+  "湖南省":["长沙","株洲","湘潭","衡阳","岳阳"],
+  "福建省":["福州","厦门","泉州","漳州","莆田"],
+  "安徽省":["合肥","芜湖","蚌埠","阜阳","安庆"],
+  "河北省":["石家庄","唐山","保定","邯郸","廊坊"],
+  "辽宁省":["沈阳","大连","鞍山","锦州"],
+  "陕西省":["西安","咸阳","宝鸡","渭南"],
+  "江西省":["南昌","赣州","九江","宜春"],
+  "黑龙江省":["哈尔滨","大庆","齐齐哈尔"],
+  "吉林省":["长春","吉林","四平"],
+  "山西省":["太原","大同","运城"],
+  "云南省":["昆明","曲靖","大理","丽江"],
+  "广西壮族自治区":["南宁","柳州","桂林","北海"],
+  "贵州省":["贵阳","遵义"],
+  "甘肃省":["兰州","天水"],
+  "海南省":["海口","三亚"],
+  "内蒙古自治区":["呼和浩特","包头","鄂尔多斯"],
+  "新疆维吾尔自治区":["乌鲁木齐","昌吉"],
+  "宁夏回族自治区":["银川"],"青海省":["西宁"],"西藏自治区":["拉萨"],
+  "香港特别行政区":["香港"],"澳门特别行政区":["澳门"],"台湾省":["台北","高雄","台中"]
+};
+
+const hot = ["北京","上海","广州","深圳","杭州","成都","武汉","南京","重庆","西安","长沙","苏州"];
+
+const dimMap = { EI:"外向E/内向I", SN:"感觉S/直觉N", TF:"思维T/情感F", JP:"判断J/知觉P" };
+
+const typeData = {
+  ISTJ:{n:"检查者",d:"务实可靠，注重事实和责任，做事有条不紊。"},
+  ISFJ:{n:"守护者",d:"友善负责，注重细节和他人感受，稳定可靠。"},
+  INFJ:{n:"提倡者",d:"有远见和洞察力，坚定执行自己的愿景。"},
+  INTJ:{n:"建筑师",d:"战略思维，善于长远规划并坚定执行。"},
+  ISTP:{n:"鉴赏家",d:"灵活务实，善于分析问题并迅速找到解决方案。"},
+  ISFP:{n:"探险家",d:"友好敏感，享受当下，忠于自己的价值观。"},
+  INFP:{n:"调停者",d:"理想主义者，好奇心强，寻求理解和帮助他人。"},
+  INTP:{n:"逻辑学家",d:"追求合理解释，喜欢理论和抽象思考。"},
+  ESTP:{n:"企业家",d:"灵活务实，善于快速评估并采取行动。"},
+  ESFP:{n:"表演者",d:"外向友善，热爱生活，带来乐趣和活力。"},
+  ENFP:{n:"竞选者",d:"热情有想象力，充满自信地即兴发挥。"},
+  ENTP:{n:"辩论家",d:"聪明敏捷，善于创新解决问题。"},
+  ESTJ:{n:"总经理",d:"果断务实，善于组织并注重效率。"},
+  ESFJ:{n:"执政官",d:"热心合作，重视和谐，忠诚可靠。"},
+  ENFJ:{n:"主人公",d:"富有同理心，善于激励和引导他人成长。"},
+  ENTJ:{n:"指挥官",d:"果断领导，善于制定系统解决组织问题。"}
+};
+
+// State
+let cur = 0, qList = [], ansList = [];
+let user = { gender:'', age:'', city:'' };
+let scores = { E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0 };
+
+// Init
+function init() {
+  const g = document.getElementById('hotGrid');
+  hot.forEach(c => { const s = document.createElement('span'); s.className='chip'; s.textContent=c; s.onclick=()=>pickC(s,c); g.appendChild(s); });
+  const ps = document.getElementById('provS');
+  Object.keys(provData).forEach(p => { const o = document.createElement('option'); o.value=p; o.textContent=p; ps.appendChild(o); });
+}
+
+function pickG(el,g) { document.querySelectorAll('.g-opt').forEach(e=>e.classList.remove('on')); el.classList.add('on'); user.gender=g; }
+
+function pickC(el,c) { document.querySelectorAll('.chip').forEach(e=>e.classList.remove('on')); el.classList.add('on'); user.city=c; document.getElementById('provS').value=''; document.getElementById('cityS').value=''; document.getElementById('cityS').disabled=true; }
+
+function onProv() {
+  const p=document.getElementById('provS').value, cs=document.getElementById('cityS');
+  cs.innerHTML='<option value="">城市</option>';
+  if(p&&provData[p]){provData[p].forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o)});cs.disabled=false;cs.onchange=function(){if(this.value){user.city=this.value;document.querySelectorAll('.chip').forEach(e=>e.classList.remove('on'))}}}else{cs.disabled=true}
+}
+
+function goQuiz() {
+  user.age=document.getElementById('ageInp').value;
+  const cv=document.getElementById('cityS').value; if(cv)user.city=cv;
+  const e=document.getElementById('fErr');
+  if(!user.gender||!user.age||!user.city){e.textContent='请完善所有信息';e.style.display='block';return}
+  if(user.age<10||user.age>100){e.textContent='请输入有效年龄';e.style.display='block';return}
+  e.style.display='none';
+  cur=0; qList=[]; ansList=[]; scores={E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
+  showPage('quiz');
+  genQuestion();
+}
+
+function showPage(id) { document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById(id).classList.add('active'); window.scrollTo({top:0}); }
+
+// ===== AI 出题 =====
+async function genQuestion() {
+  const body = document.getElementById('qBody');
+  const pct = Math.round(cur/TOTAL_Q*100);
+  document.getElementById('pN').textContent = (cur+1)+' / '+TOTAL_Q;
+  document.getElementById('pP').textContent = pct+'%';
+  document.getElementById('pF').style.width = pct+'%';
+
+  // 显示 loading
+  body.innerHTML = '<div class="q-loading"><div class="q-loading-dots"><span></span><span></span><span></span></div><div class="q-loading-text">AI 正在生成题目...</div></div>';
+
+  // 决定当前维度
+  const dimOrder = ['EI','EI','EI','EI','EI','SN','SN','SN','SN','SN','TF','TF','TF','TF','TF','JP','JP','JP','JP','JP'];
+  const dim = dimOrder[cur];
+
+  // 构建上下文
+  let history = '';
+  if (qList.length > 0) {
+    const last3 = qList.slice(-3).map((q,i) => {
+      const idx = qList.length - 3 + i;
+      if (idx < 0) return '';
+      return '题: ' + q.q + ' → 用户选: ' + (ansList[idx]==='a' ? q.a : q.b);
+    }).filter(Boolean).join('\n');
+    history = '\n\n最近回答:\n' + last3;
+  }
+
+  const dimFullName = {EI:'外向(E)/内向(I)',SN:'感觉(S)/直觉(N)',TF:'思维(T)/情感(F)',JP:'判断(J)/知觉(P)'}[dim];
+
+  const prompt = `你是 MBTI 测试出题专家。为以下用户生成 1 道 MBTI 测试题。
+
+用户: ${user.gender}，${user.age}岁
+当前测第 ${cur+1}/${TOTAL_Q} 题，维度: ${dimFullName}
+${history}
+
+要求:
+- 根据用户性别和年龄，用贴近其生活场景的情境出题
+- 如有历史回答，让新题与之前不重复，并可根据回答倾向深入探测
+- 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
+- 题目简短自然，像朋友间对话
+
+严格按此 JSON 格式输出，不要输出任何其他内容:
+{"q":"题目","a":"选项A","b":"选项B"}`;
+
+  try {
+    const resp = await fetch(API_BASE + '/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':API_KEY, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:200, messages:[{role:'user',content:prompt}] })
+    });
+
+    if (!resp.ok) throw new Error('API ' + resp.status);
+
+    const data = await resp.json();
+    const text = data.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('格式错误');
+
+    const q = JSON.parse(jsonMatch[0]);
+    q.d = dim;
+    qList.push(q);
+
+    // 渲染题目
+    body.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'q-card';
+    card.innerHTML =
+      '<div class="q-tag">' + dimMap[dim] + '</div>' +
+      '<div class="q-text">' + q.q + '</div>' +
+      '<button class="q-opt" data-c="a">' + q.a + '</button>' +
+      '<button class="q-opt" data-c="b">' + q.b + '</button>' +
+      (cur > 0 ? '<button class="q-back" onclick="prevQ()">← 上一题</button>' : '');
+    body.appendChild(card);
+    card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
+
+  } catch(err) {
+    console.error(err);
+    body.innerHTML = '<div class="q-loading"><div class="q-loading-text" style="color:#ff6b6b">出题失败，点击重试</div><button class="btn btn-dim" style="max-width:160px;margin-top:12px" onclick="genQuestion()">重试</button></div>';
+  }
+}
+
+function pickAns(c) {
+  ansList[cur] = c;
+  const q = qList[cur];
+  if (c === 'a') scores[q.d[0]]++; else scores[q.d[1]]++;
+  cur++;
+  if (cur >= TOTAL_Q) { goResult(); } else { genQuestion(); }
+}
+
+function prevQ() {
+  if (cur > 0) {
+    // 撤销上一题得分
+    const lastQ = qList[cur-1];
+    const lastAns = ansList[cur-1];
+    if (lastAns === 'a') scores[lastQ.d[0]]--; else scores[lastQ.d[1]]--;
+    cur--;
+    // 直接显示已有题目
+    const body = document.getElementById('qBody');
+    const pct = Math.round(cur/TOTAL_Q*100);
+    document.getElementById('pN').textContent = (cur+1)+' / '+TOTAL_Q;
+    document.getElementById('pP').textContent = pct+'%';
+    document.getElementById('pF').style.width = pct+'%';
+
+    const q = qList[cur];
+    body.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'q-card';
+    card.innerHTML =
+      '<div class="q-tag">' + dimMap[q.d] + '</div>' +
+      '<div class="q-text">' + q.q + '</div>' +
+      '<button class="q-opt" data-c="a">' + q.a + '</button>' +
+      '<button class="q-opt" data-c="b">' + q.b + '</button>' +
+      (cur > 0 ? '<button class="q-back" onclick="prevQ()">← 上一题</button>' : '');
+    body.appendChild(card);
+    card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
+  }
+}
+
+// ===== 结果 =====
+function goResult() {
+  showPage('loading');
+  setTimeout(() => {
+    const sc = scores;
+    const type = (sc.E>=sc.I?'E':'I')+(sc.S>=sc.N?'S':'N')+(sc.T>=sc.F?'T':'F')+(sc.J>=sc.P?'J':'P');
+    const td = typeData[type];
+
+    const dims = [
+      {n:'外向E',v:sc.E,t:sc.E+sc.I},{n:'感觉S',v:sc.S,t:sc.S+sc.N},
+      {n:'思维T',v:sc.T,t:sc.T+sc.F},{n:'判断J',v:sc.J,t:sc.J+sc.P}
+    ];
+
+    let dH = '';
+    dims.forEach(d => { const p=Math.round(d.v/d.t*100); dH+='<div class="dim-r"><div class="dim-n">'+d.n+'</div><div class="dim-t"><div class="dim-f" style="width:'+p+'%"></div></div><div class="dim-p">'+p+'%</div></div>'; });
+
+    const rd = [Math.round(sc.E/(sc.E+sc.I)*100),Math.round(sc.S/(sc.S+sc.N)*100),Math.round(sc.T/(sc.T+sc.F)*100),Math.round(sc.J/(sc.J+sc.P)*100),Math.round(sc.N/(sc.S+sc.N)*100),Math.round(sc.F/(sc.T+sc.F)*100)];
+
+    const el = document.getElementById('result');
+    el.innerHTML =
+      '<div class="res-hero"><div class="res-tags"><span>'+user.gender+'</span><span>'+user.age+'岁</span><span>'+user.city+'</span></div><div class="res-type">'+type+'</div><div class="res-name">'+td.n+'</div><div class="res-desc">'+td.d+'</div></div>' +
+      '<div class="radar-w"><div id="radar"></div></div>' +
+      '<div class="sec"><div class="sec-card"><div class="sec-label">维度分析</div>'+dH+'</div></div>' +
+      '<div class="sec" id="as1"><div class="sec-card"><div class="sec-label">AI 职业分析</div><div id="ab1"><div class="ai-ld"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-ld-t">分析中...</div></div></div></div></div>' +
+      '<div class="sec" id="as2"><div class="sec-card"><div class="sec-label">'+user.city+' 推荐企业</div><div id="ab2"><div class="ai-ld"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-ld-t">搜索中...</div></div></div></div></div>' +
+      '<div class="res-ft"><button class="btn btn-dim" onclick="showPage(\'home\')">重新测试</button></div>';
+
+    showPage('result');
+
+    const ch = echarts.init(document.getElementById('radar'));
+    ch.setOption({
+      radar:{
+        indicator:[{name:'外向',max:100},{name:'感觉',max:100},{name:'思维',max:100},{name:'判断',max:100},{name:'直觉',max:100},{name:'情感',max:100}],
+        shape:'circle',splitNumber:4,
+        axisName:{color:'rgba(255,255,255,0.3)',fontSize:11},
+        splitArea:{areaStyle:{color:['rgba(255,255,255,0.02)','rgba(255,255,255,0.04)']}},
+        axisLine:{lineStyle:{color:'rgba(255,255,255,0.06)'}},
+        splitLine:{lineStyle:{color:'rgba(255,255,255,0.05)'}}
+      },
+      series:[{type:'radar',data:[{value:rd,areaStyle:{color:'rgba(120,80,220,0.15)'},lineStyle:{color:'rgba(160,130,255,0.5)',width:1.5},itemStyle:{color:'rgba(160,130,255,0.8)'},symbol:'circle',symbolSize:4}]}]
+    });
+
+    aiCareer(type,td.n,sc);
+    aiSearch(type,td.n);
+  }, 1200);
+}
+
+// ===== AI 职业分析（精简） =====
+async function aiCareer(type,name,sc) {
+  const box = document.getElementById('ab1');
+  const prompt = `用户：${user.gender}，${user.age}岁，${user.city}，MBTI ${type}（${name}）
+E${sc.E}/I${sc.I} S${sc.S}/N${sc.N} T${sc.T}/F${sc.F} J${sc.J}/P${sc.P}
+
+请用极简风格输出（总计不超过 250 字）：
+**性格优势**：2句话概括核心优势
+**${user.city}机会**：2句话点明适合的行业方向
+**推荐职业**：列出4个，每个仅"职业名 — 一句话理由"
+**一条建议**：针对${user.age}岁给1条最关键的建议
+
+直接输出，不要寒暄。`;
+
+  await streamCall(box, prompt, false);
+}
+
+// ===== AI 搜索企业（精简） =====
+async function aiSearch(type,name) {
+  const box = document.getElementById('ab2');
+  const prompt = `搜索${user.city}适合 MBTI ${type}（${name}）的知名企业。
+
+输出 5 家企业，每家一行，格式：
+**企业名** — 行业 — 为什么适合（10字内）
+
+不要寒暄，不要多余解释，总计不超过 150 字。`;
+
+  await streamCall(box, prompt, true);
+}
+
+// ===== 流式调用 =====
+async function streamCall(box, prompt, search) {
+  try {
+    const b = { model:'claude-sonnet-4-20250514', max_tokens:600, stream:true, messages:[{role:'user',content:prompt}] };
+    if (search) b.tools = [{type:'web_search_20250305',name:'web_search',max_uses:3}];
+
+    const r = await fetch(API_BASE+'/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify(b)
+    });
+
+    if (!r.ok) throw new Error(r.status);
+
+    const rd = r.body.getReader(), dc = new TextDecoder();
+    let txt='', buf='';
+    box.innerHTML = '<div class="ai-s blink"></div>';
+    const el = box.querySelector('.ai-s');
+
+    while(true) {
+      const {done,value} = await rd.read();
+      if(done) break;
+      buf += dc.decode(value,{stream:true});
+      const ls = buf.split('\n'); buf = ls.pop()||'';
+      for(const l of ls) {
+        if(!l.startsWith('data: ')) continue;
+        const d = l.slice(6).trim();
+        if(d==='[DONE]') continue;
+        try { const p=JSON.parse(d); if(p.type==='content_block_delta'&&p.delta&&p.delta.text){txt+=p.delta.text;el.innerHTML=md(txt);} } catch(e){}
+      }
+    }
+    el.classList.remove('blink');
+  } catch(e) {
+    console.error(e);
+    box.innerHTML = '<div class="ai-err">请求失败<br><button onclick="location.reload()">刷新重试</button></div>';
+  }
+}
+
+function md(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+
+init();
+</script>
+</body>
+</html>
