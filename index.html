@@ -534,6 +534,8 @@ const typeData = {
 let cur = 0, qList = [], ansList = [];
 let user = { gender:'', age:'', city:'' };
 let scores = { E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0 };
+let prefetchedQ = null;   // 预加载的下一题数据
+let prefetchPromise = null; // 预加载请求的 Promise
 
 // 音效
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -576,6 +578,7 @@ function goQuiz() {
   if(user.age<10||user.age>100){e.textContent='请输入有效年龄';e.style.display='block';return}
   e.style.display='none';
   cur=0; qList=[]; ansList=[]; scores={E:0,I:0,S:0,N:0,T:0,F:0,J:0,P:0};
+  prefetchedQ=null; prefetchPromise=null;
   showPage('quiz');
   genQuestion();
 }
@@ -583,28 +586,11 @@ function goQuiz() {
 function showPage(id) { document.querySelectorAll('.page').forEach(p=>p.classList.remove('active')); document.getElementById(id).classList.add('active'); window.scrollTo({top:0}); }
 
 // ===== AI 出题 =====
-async function genQuestion() {
-  const body = document.getElementById('qBody');
-  const pct = Math.round(cur/TOTAL_Q*100);
-  document.getElementById('pN').textContent = (cur+1)+' / '+TOTAL_Q;
-  document.getElementById('pP').textContent = pct+'%';
-  document.getElementById('pF').style.width = pct+'%';
+const dimOrder = ['EI','EI','EI','EI','EI','SN','SN','SN','SN','SN','TF','TF','TF','TF','TF','JP','JP','JP','JP','JP'];
 
-  // 显示 loading
-  const loadTips = [
-    `正在根据${user.age}岁${user.gender}性的生活场景定制题目...`,
-    `正在结合${user.city}的生活背景为你出题...`,
-    `正在分析你的回答倾向，生成更精准的问题...`,
-    `正在为你量身设计下一道情境题...`,
-    `根据你的作答风格，正在匹配最佳测试路径...`,
-    `正在结合你的个人特征定制专属题目...`
-  ];
-  const tip = cur < 2 ? loadTips[cur] : loadTips[Math.floor(Math.random() * (loadTips.length - 2)) + 2];
-  body.innerHTML = '<div class="q-loading"><div class="q-loading-dots"><span></span><span></span><span></span></div><div class="q-loading-text">' + tip + '</div></div>';
-
-  // 决定当前维度
-  const dimOrder = ['EI','EI','EI','EI','EI','SN','SN','SN','SN','SN','TF','TF','TF','TF','TF','JP','JP','JP','JP','JP'];
-  const dim = dimOrder[cur];
+// 独立的 API 请求函数，接受题号参数，返回 Promise<question>
+function fetchQuestion(qIndex) {
+  const dim = dimOrder[qIndex];
 
   // 构建上下文
   let history = '';
@@ -621,7 +607,7 @@ async function genQuestion() {
 
   // 计算当前维度倾向
   let tilt = '';
-  if (cur > 0) {
+  if (qIndex > 0) {
     const d0 = dim[0], d1 = dim[1];
     const diff = scores[d0] - scores[d1];
     if (diff > 1) tilt = `\n用户目前明显偏${d0}，请出更细腻的边界题来精确探测。`;
@@ -631,7 +617,7 @@ async function genQuestion() {
   const prompt = `你是资深 MBTI 心理测评师，精通荣格人格类型理论。为以下用户出 1 道测试题。
 
 用户: ${user.gender}，${user.age}岁，${user.city}
-第 ${cur+1}/${TOTAL_Q} 题，测试维度: ${dimFullName}${tilt}
+第 ${qIndex+1}/${TOTAL_Q} 题，测试维度: ${dimFullName}${tilt}
 ${history}
 
 出题原则:
@@ -641,27 +627,24 @@ ${history}
 4. 题目要有具体细节（如"周末下午""同事约你""刚到一个新城市"），不要泛泛而谈
 5. 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
 6. 与之前的题目场景不同，覆盖不同生活面
+7. 题目不超过40字，每个选项不超过30字，务必精简
 
 严格按此 JSON 输出，不要任何其他内容:
 {"q":"题目","a":"选项A","b":"选项B"}`;
 
-  try {
-    const resp = await fetch(API_BASE + '/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'x-api-key':API_KEY, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:200, messages:[{role:'user',content:prompt}] })
-    });
-
+  return fetch(API_BASE + '/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'x-api-key':API_KEY, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:400, messages:[{role:'user',content:prompt}] })
+  }).then(resp => {
     if (!resp.ok) throw new Error('API ' + resp.status);
-
-    const data = await resp.json();
-    // 找到 text 类型的 content block
+    return resp.json();
+  }).then(data => {
     const textBlock = data.content.find(b => b.type === 'text');
     if (!textBlock || !textBlock.text) throw new Error('无文本返回');
     const text = textBlock.text.trim();
     console.log('AI 返回:', text);
 
-    // 从第一个 { 到最后一个 } 提取完整 JSON
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
     if (start === -1 || end === -1 || end <= start) throw new Error('格式错误');
@@ -673,25 +656,95 @@ ${history}
     }
     if (!q.q || !q.a || !q.b) throw new Error('缺少字段');
     q.d = dim;
-    qList.push(q);
+    return q;
+  });
+}
 
-    // 渲染题目
-    body.innerHTML = '';
-    const card = document.createElement('div');
-    card.className = 'q-card';
-    card.innerHTML =
-      '<div class="q-tag">' + dimMap[dim] + '</div>' +
-      '<div class="q-text">' + q.q + '</div>' +
-      '<button class="q-opt" data-c="a">' + q.a + '</button>' +
-      '<button class="q-opt" data-c="b">' + q.b + '</button>' +
-      '<button class="q-skip">不太确定，跳过</button>' +
-      (cur > 0 ? '<button class="q-back" onclick="prevQ()">返回上一题</button>' : '');
-    body.appendChild(card);
-    card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
-    card.querySelector('.q-skip').addEventListener('click', function(){ pickAns('skip'); });
+// 渲染题目到页面
+function renderQuestion(q) {
+  const body = document.getElementById('qBody');
+  body.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'q-card';
+  card.innerHTML =
+    '<div class="q-tag">' + dimMap[q.d] + '</div>' +
+    '<div class="q-text">' + q.q + '</div>' +
+    '<button class="q-opt" data-c="a">' + q.a + '</button>' +
+    '<button class="q-opt" data-c="b">' + q.b + '</button>' +
+    '<button class="q-skip">不太确定，跳过</button>' +
+    (cur > 0 ? '<button class="q-back" onclick="prevQ()">返回上一题</button>' : '');
+  body.appendChild(card);
+  card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
+  card.querySelector('.q-skip').addEventListener('click', function(){ pickAns('skip'); });
+}
+
+// 启动预加载下一题
+function startPrefetch() {
+  if (cur + 1 < TOTAL_Q) {
+    prefetchPromise = fetchQuestion(cur + 1);
+    prefetchPromise.then(q => { prefetchedQ = q; }).catch(err => {
+      console.warn('预加载失败（不影响体验）:', err);
+      prefetchedQ = null;
+      prefetchPromise = null;
+    });
+  }
+}
+
+async function genQuestion() {
+  const body = document.getElementById('qBody');
+  const pct = Math.round(cur/TOTAL_Q*100);
+  document.getElementById('pN').textContent = (cur+1)+' / '+TOTAL_Q;
+  document.getElementById('pP').textContent = pct+'%';
+  document.getElementById('pF').style.width = pct+'%';
+
+  try {
+    let q;
+
+    if (prefetchedQ) {
+      // 预加载已完成，秒渲染
+      q = prefetchedQ;
+      prefetchedQ = null;
+      prefetchPromise = null;
+    } else if (prefetchPromise) {
+      // 预加载进行中，显示 loading 并等待
+      const loadTips = [
+        `正在根据${user.age}岁${user.gender}性的生活场景定制题目...`,
+        `正在结合${user.city}的生活背景为你出题...`,
+        `正在分析你的回答倾向，生成更精准的问题...`,
+        `正在为你量身设计下一道情境题...`,
+        `根据你的作答风格，正在匹配最佳测试路径...`,
+        `正在结合你的个人特征定制专属题目...`
+      ];
+      const tip = cur < 2 ? loadTips[cur] : loadTips[Math.floor(Math.random() * (loadTips.length - 2)) + 2];
+      body.innerHTML = '<div class="q-loading"><div class="q-loading-dots"><span></span><span></span><span></span></div><div class="q-loading-text">' + tip + '</div></div>';
+      q = await prefetchPromise;
+      prefetchedQ = null;
+      prefetchPromise = null;
+    } else {
+      // 无预加载（首题或预加载失败），正常请求
+      const loadTips = [
+        `正在根据${user.age}岁${user.gender}性的生活场景定制题目...`,
+        `正在结合${user.city}的生活背景为你出题...`,
+        `正在分析你的回答倾向，生成更精准的问题...`,
+        `正在为你量身设计下一道情境题...`,
+        `根据你的作答风格，正在匹配最佳测试路径...`,
+        `正在结合你的个人特征定制专属题目...`
+      ];
+      const tip = cur < 2 ? loadTips[cur] : loadTips[Math.floor(Math.random() * (loadTips.length - 2)) + 2];
+      body.innerHTML = '<div class="q-loading"><div class="q-loading-dots"><span></span><span></span><span></span></div><div class="q-loading-text">' + tip + '</div></div>';
+      q = await fetchQuestion(cur);
+    }
+
+    qList[cur] = q;
+    renderQuestion(q);
+
+    // 渲染完成后，启动预加载下一题
+    startPrefetch();
 
   } catch(err) {
     console.error(err);
+    prefetchedQ = null;
+    prefetchPromise = null;
     body.innerHTML = '<div class="q-loading"><div class="q-loading-text" style="color:#ff6b6b">出题失败，点击重试</div><button class="btn btn-dim" style="max-width:160px;margin-top:12px" onclick="genQuestion()">重试</button></div>';
   }
 }
@@ -704,11 +757,15 @@ function pickAns(c) {
   else if (c === 'b') scores[q.d[1]]++;
   else { scores[q.d[0]] += 0.5; scores[q.d[1]] += 0.5; }
   cur++;
-  if (cur >= TOTAL_Q) { goResult(); } else { genQuestion(); }
+  if (cur >= TOTAL_Q) { prefetchedQ=null; prefetchPromise=null; goResult(); } else { genQuestion(); }
 }
 
 function prevQ() {
   if (cur > 0) {
+    // 清空预加载（回退后题序变了）
+    prefetchedQ = null;
+    prefetchPromise = null;
+
     const lastQ = qList[cur-1];
     const lastAns = ansList[cur-1];
     if (lastAns === 'a') scores[lastQ.d[0]]--;
@@ -716,26 +773,15 @@ function prevQ() {
     else { scores[lastQ.d[0]] -= 0.5; scores[lastQ.d[1]] -= 0.5; }
     cur--;
 
-    const body = document.getElementById('qBody');
     const pct = Math.round(cur/TOTAL_Q*100);
     document.getElementById('pN').textContent = (cur+1)+' / '+TOTAL_Q;
     document.getElementById('pP').textContent = pct+'%';
     document.getElementById('pF').style.width = pct+'%';
 
-    const q = qList[cur];
-    body.innerHTML = '';
-    const card = document.createElement('div');
-    card.className = 'q-card';
-    card.innerHTML =
-      '<div class="q-tag">' + dimMap[q.d] + '</div>' +
-      '<div class="q-text">' + q.q + '</div>' +
-      '<button class="q-opt" data-c="a">' + q.a + '</button>' +
-      '<button class="q-opt" data-c="b">' + q.b + '</button>' +
-      '<button class="q-skip">不太确定，跳过</button>' +
-      (cur > 0 ? '<button class="q-back" onclick="prevQ()">返回上一题</button>' : '');
-    body.appendChild(card);
-    card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
-    card.querySelector('.q-skip').addEventListener('click', function(){ pickAns('skip'); });
+    renderQuestion(qList[cur]);
+
+    // 回退后重新预加载下一题
+    startPrefetch();
   }
 }
 
