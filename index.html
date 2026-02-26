@@ -273,6 +273,27 @@ body::after {
 
 .q-opt:active { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); color: var(--text); }
 
+.q-desc { margin-bottom: 20px; }
+.q-desc-item {
+  padding: 12px 16px; margin-bottom: 8px; background: var(--card);
+  border: 1px solid var(--card-border); border-radius: 12px;
+  font-size: 14px; line-height: 1.5; color: var(--text-2);
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.q-desc-label {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px;
+  background: rgba(255,255,255,0.08); display: grid; place-items: center;
+  font-size: 12px; font-weight: 600; color: var(--text-3);
+}
+.q-scale { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.q-sc-btn {
+  padding: 13px 8px; background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 12px; font-size: 13px; color: var(--text-2); cursor: pointer;
+  transition: all 0.15s; text-align: center; line-height: 1.4;
+}
+.q-sc-btn:active { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.18); color: var(--text); }
+.q-sc-btn.strong { border-color: rgba(255,255,255,0.12); }
+
 .q-skip {
   display: block; width: 100%; padding: 12px 18px; margin-bottom: 10px;
   background: none; border: 1px dashed rgba(255,255,255,0.08); border-radius: 14px;
@@ -617,27 +638,42 @@ function fetchQuestion(qIndex) {
     const last3 = qList.slice(-3).map((q,i) => {
       const idx = qList.length - 3 + i;
       if (idx < 0) return '';
-      return '题: ' + q.q + ' → 用户选: ' + (ansList[idx]==='a' ? q.a : q.b);
+      const ans = ansList[idx];
+      if (!ans) return '';
+      const choice = ans.c === 'a' ? q.a : (ans.c === 'b' ? q.b : '跳过');
+      const strength = ans.w === 2 ? '(强烈)' : ans.w === 1 ? '(偏向)' : '';
+      return '题: ' + q.q + ' → 用户选: ' + choice + strength;
     }).filter(Boolean).join('\n');
     history = '\n\n最近回答:\n' + last3;
   }
 
   const dimFullName = {EI:'外向(E)/内向(I)',SN:'感觉(S)/直觉(N)',TF:'思维(T)/情感(F)',JP:'判断(J)/知觉(P)'}[dim];
 
-  const prompt = `你是 MBTI 测试出题专家。为以下用户生成 1 道 MBTI 测试题。
+  const dimTips = {
+    EI: '外向E：从社交互动中获取能量，倾向行动和外部世界；内向I：从独处思考中获取能量，倾向反思和内心世界。聚焦能量来源和注意力方向，而非社交能力。',
+    SN: '感觉S：关注具体事实和当下细节，信任直接经验；直觉N：关注可能性和整体模式，信任灵感和联想。聚焦信息获取方式，而非智力水平。',
+    TF: '思维T：决策时优先考虑逻辑和客观标准；情感F：决策时优先考虑个人价值和他人感受。聚焦决策依据，而非是否有感情。',
+    JP: '判断J：偏好有计划、有条理的生活方式；知觉P：偏好灵活、随机应变的生活方式。聚焦生活方式偏好，而非能力。'
+  }[dim];
+
+  const prompt = `你是专业MBTI心理测量师。为以下用户出1道高区分度的测试题。
 
 用户: ${user.gender}，${user.age}岁，${user.city}
 第 ${qIndex+1}/${TOTAL_Q} 题，维度: ${dimFullName}
 ${history}
 
-要求:
-- 用贴近用户生活的真实情境出题，有具体细节
-- 两个选项必须分别明确指向${dim[0]}和${dim[1]}倾向，区分度要高
-- 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
-- 与之前的题目场景不同
-- 题目简短自然，像朋友间对话
+维度说明: ${dimTips}
 
-严格按此 JSON 格式输出，不要输出任何其他内容:
+出题原则:
+- 用贴近该用户真实生活的具体情境，有画面感
+- 选项A对应${dim[0]}倾向，选项B对应${dim[1]}倾向
+- 两个选项必须都是正面合理的，避免社会期望偏差（不能让一个选项明显更"好"）
+- 聚焦内在偏好而非能力（问"更倾向/更自然"而非"更擅长"）
+- 选项间的心理倾向差异要清晰，不能模棱两可
+- 与之前的题目场景不同，覆盖不同生活领域（工作/社交/休闲/学习/决策等）
+- 题目自然口语化
+
+严格按此JSON格式输出，不要输出其他内容:
 {"q":"题目","a":"选项A","b":"选项B"}`;
 
   return fetch(API_BASE + '/v1/messages', {
@@ -677,13 +713,21 @@ function renderQuestion(q) {
   card.innerHTML =
     '<div class="q-tag">' + dimMap[q.d] + '</div>' +
     '<div class="q-text">' + q.q + '</div>' +
-    '<button class="q-opt" data-c="a">' + q.a + '</button>' +
-    '<button class="q-opt" data-c="b">' + q.b + '</button>' +
-    '<button class="q-skip">不太确定，跳过</button>' +
+    '<div class="q-desc">' +
+      '<div class="q-desc-item"><span class="q-desc-label">A</span>' + q.a + '</div>' +
+      '<div class="q-desc-item"><span class="q-desc-label">B</span>' + q.b + '</div>' +
+    '</div>' +
+    '<div class="q-scale">' +
+      '<button class="q-sc-btn strong" data-c="a" data-w="2">完全是 A</button>' +
+      '<button class="q-sc-btn" data-c="a" data-w="1">偏向 A</button>' +
+      '<button class="q-sc-btn" data-c="b" data-w="1">偏向 B</button>' +
+      '<button class="q-sc-btn strong" data-c="b" data-w="2">完全是 B</button>' +
+    '</div>' +
+    '<button class="q-skip">不确定，跳过</button>' +
     (cur > 0 ? '<button class="q-back" onclick="prevQ()">返回上一题</button>' : '');
   body.appendChild(card);
-  card.querySelectorAll('.q-opt').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c); }));
-  card.querySelector('.q-skip').addEventListener('click', function(){ pickAns('skip'); });
+  card.querySelectorAll('.q-sc-btn').forEach(b => b.addEventListener('click', function(){ pickAns(this.dataset.c, parseInt(this.dataset.w)); }));
+  card.querySelector('.q-skip').addEventListener('click', function(){ pickAns('skip', 0); });
 }
 
 // 启动预加载下一题
@@ -757,12 +801,12 @@ async function genQuestion() {
   }
 }
 
-function pickAns(c) {
+function pickAns(c, w) {
   playTick();
-  ansList[cur] = c;
+  ansList[cur] = { c: c, w: w || 0 };
   const q = qList[cur];
-  if (c === 'a') scores[q.d[0]]++;
-  else if (c === 'b') scores[q.d[1]]++;
+  if (c === 'a') scores[q.d[0]] += w;
+  else if (c === 'b') scores[q.d[1]] += w;
   cur++;
   if (cur >= TOTAL_Q) { prefetchedQ=null; prefetchPromise=null; goResult(); } else { genQuestion(); }
 }
@@ -775,8 +819,8 @@ function prevQ() {
 
     const lastQ = qList[cur-1];
     const lastAns = ansList[cur-1];
-    if (lastAns === 'a') scores[lastQ.d[0]]--;
-    else if (lastAns === 'b') scores[lastQ.d[1]]--;
+    if (lastAns.c === 'a') scores[lastQ.d[0]] -= lastAns.w;
+    else if (lastAns.c === 'b') scores[lastQ.d[1]] -= lastAns.w;
     cur--;
 
     const pct = Math.round(cur/TOTAL_Q*100);
@@ -918,8 +962,37 @@ async function saveResult() {
   const ft = document.querySelector('.res-ft');
   ft.style.display = 'none';
   try {
-    const canvas = await html2canvas(document.getElementById('result'), { backgroundColor:'#0e0e11', scale:2, useCORS:true });
+    const resultEl = document.getElementById('result');
+
+    // 1. ECharts canvas 转成 img，html2canvas 才能正确捕获
+    const radarDom = document.getElementById('radar');
+    const chart = echarts.getInstanceByDom(radarDom);
+    let tmpImg = null;
+    if (chart) {
+      tmpImg = document.createElement('img');
+      tmpImg.src = chart.getDataURL({ type:'png', pixelRatio:2, backgroundColor:'transparent' });
+      tmpImg.style.width = '100%';
+      tmpImg.style.height = '260px';
+      radarDom.style.display = 'none';
+      radarDom.parentNode.insertBefore(tmpImg, radarDom.nextSibling);
+    }
+
+    // 2. 把 body 伪元素的渐变背景临时加到结果容器上
+    resultEl.style.background =
+      'radial-gradient(ellipse 80% 60% at 15% 10%, rgba(120,80,220,0.18) 0%, transparent 60%),' +
+      'radial-gradient(ellipse 60% 50% at 85% 20%, rgba(60,100,240,0.14) 0%, transparent 55%),' +
+      'radial-gradient(ellipse 70% 55% at 50% 90%, rgba(200,80,160,0.12) 0%, transparent 55%),' +
+      '#0e0e11';
+    resultEl.style.padding = '28px 20px 48px';
+
+    const canvas = await html2canvas(resultEl, { backgroundColor:null, scale:2, useCORS:true });
+
+    // 3. 恢复原状
+    resultEl.style.background = '';
+    resultEl.style.padding = '';
+    if (tmpImg) { tmpImg.remove(); radarDom.style.display = ''; }
     ft.style.display = '';
+
     canvas.toBlob(function(blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
